@@ -49,7 +49,7 @@ class GeniusPad(App):
         self.parent.bind(size=self._update_rect, pos=self._update_rect)
 
         self.img_count = 0
-        self.result_fetch = mp.Queue()
+        self.result_fetched = mp.Queue()
         with self.parent.canvas.before:
             Color(1, 1, 1, 1)
             self.rect = Rectangle(size=self.parent.size, pos=self.parent.pos)
@@ -57,7 +57,7 @@ class GeniusPad(App):
 
     def init_compute(self, _):
         img_array = self.generate_image()
-        self.task = mp.Process(target=EquationRecognizer, args=(img_array, self.result_fetch))
+        self.task = mp.Process(target=EquationRecognizer, args=(img_array, self.result_fetched))
         self.task.start()
 
         # fetch the result after one second
@@ -67,11 +67,11 @@ class GeniusPad(App):
         if self.task.is_alive():
             Clock.schedule_once(self.fetch_compute_result, .1)
         else:
-            self.reder_with_result()
+            self.render_with_result()
 
-    def render_wth_result(self):
+    def render_with_result(self):
         # TODO: re draw based on the result given back
-        raise NotImplementedError\
+        print(self.result_fetched)
 
     def _update_rect(self, instance, value):
         self.rect.pos = instance.pos
