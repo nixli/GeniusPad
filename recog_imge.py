@@ -25,3 +25,7 @@ def EquationRecognizer(img, fetch_result):
 
     fetch_result.put(result)
     return
+
+
+
+def K-means()
