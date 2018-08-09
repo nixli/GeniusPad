@@ -1,7 +1,8 @@
 import tensorflow as tf
 import multiprocessing as mp
 import time
-
+from functools import reduce
+from copy import deepcopy
 
 class RecongnitionResult:
 
@@ -13,19 +14,30 @@ class RecongnitionResult:
         pass
 
 
-def EquationRecognizer(img, fetch_result):
+def EquationRecognizer(img, pipe):
     # TODO implement this
     # make sure we have a queue for inter process communication
-    assert(isinstance(fetch_result, mp.queues.Queue))
+    assert(isinstance(pipe, mp.queues.Queue))
     print("[INFO   ] received image with shape", img.shape)
 
-    time.sleep(3)
+    DBSCAN(img)
     # fill the result from the computation
+    #newimg = deepcopy(img)
     result = RecongnitionResult()
 
-    fetch_result.put(result)
+    pipe.put(result)
     return
 
 
 
-def K-means()
+def DBSCAN(drawing, eps = 1, ):
+    row, col = drawing.shape
+
+    for i in range(row//10 ):
+        for j in range(col//10):
+            if drawing[i*10][j*10] > 0:
+                print(".", end='')
+            else:
+                print(" ", end='')
+        print()
+

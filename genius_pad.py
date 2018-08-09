@@ -4,14 +4,17 @@ from kivy.uix.button import Button
 from kivy.core.window import Window
 from kivy.animation import Animation
 from kivy.uix.label import Label
-from kivy.graphics import Color, Line, Rectangle
 from kivy.uix.floatlayout import  FloatLayout
 from kivy.clock import Clock
+from kivy.graphics import (
+    Canvas, Translate, Fbo, ClearColor, ClearBuffers, Scale, Color, Line, Rectangle)
 
 import os
 from random import random
-from matplotlib.image import imread
 import multiprocessing as mp
+import numpy as np
+from matplotlib.image import imread
+
 # local includes
 from recog_imge import *
 
@@ -25,6 +28,32 @@ class ClipBoard(Widget):
 
     def on_touch_move(self, touch):
         touch.ud['line'].points += [touch.x, touch.y]
+
+    def make_fbo(self, *args):
+
+        if self.parent is not None:
+            canvas_parent_index = self.parent.canvas.indexof(self.canvas)
+            if canvas_parent_index > -1:
+                self.parent.canvas.remove(self.canvas)
+
+        fbo = Fbo(size=self.size, with_stencilbuffer=True)
+
+        with fbo:
+            ClearColor(0, 0, 0, 0)
+            ClearBuffers()
+            Scale(1, -1, 1)
+            Translate(-self.x, -self.y - self.height, 0)
+
+        fbo.add(self.canvas)
+        fbo.draw()
+        fbo.texture.save("/tmp/acfd")
+        fbo.remove(self.canvas)
+
+
+        if self.parent is not None and canvas_parent_index > -1:
+            self.parent.canvas.insert(canvas_parent_index, self.canvas)
+
+        return fbo
 
 
 class GeniusPad(App):
@@ -49,19 +78,20 @@ class GeniusPad(App):
         self.parent.bind(size=self._update_rect, pos=self._update_rect)
 
         self.img_count = 0
-        self.result_fetched = mp.Queue()
+        self.pipe = mp.Queue()
         with self.parent.canvas.before:
             Color(1, 1, 1, 1)
             self.rect = Rectangle(size=self.parent.size, pos=self.parent.pos)
         return self.parent
 
     def init_compute(self, _):
-        img_array = self.generate_image()
-        self.task = mp.Process(target=EquationRecognizer, args=(img_array, self.result_fetched))
+        img_array = self.generate_image_data()
+
+        self.task = mp.Process(target=EquationRecognizer, args=(img_array, self.pipe, ))
         self.task.start()
 
         # fetch the result after one second
-        Clock.schedule_once(self.fetch_compute_result, 1)
+        Clock.schedule_once(self.fetch_compute_result, .1)
 
     def fetch_compute_result(self, dt):
         if self.task.is_alive():
@@ -71,7 +101,8 @@ class GeniusPad(App):
 
     def render_with_result(self):
         # TODO: re draw based on the result given back
-        print(self.result_fetched)
+        result = self.pipe.get()
+        print(result.info)
 
     def _update_rect(self, instance, value):
         self.rect.pos = instance.pos
@@ -80,11 +111,9 @@ class GeniusPad(App):
     def clear_canvas(self, obj):
         self.painter.canvas.clear()
 
-    def generate_image(self):
-        self.img_count += 1
-        img_file = "/tmp/input_img"
+    def generate_image_data(self):
 
-        self.parent.export_to_png(img_file)
+        fbo = self.painter.make_fbo()
         with self.parent.canvas:
             anmi = Animation(opacity=0, duration=3)
             x,y = Window.size
@@ -93,5 +122,15 @@ class GeniusPad(App):
                         texture_size = label_size, bold = True)
             anmi.start(msg)
 
-        image = imread(img_file)
-        return image
+        # each pixel is 8 bits, but the idea of color needs to be abstracted out
+        image_array = np.frombuffer(fbo.pixels, dtype=np.uint32)
+        has_drawing = image_array > 0
+
+        # get rid of the unnecessary value, clone the only knowledge we need
+        processed_array = np.zeros(shape=image_array.shape, dtype=np.uint8)
+        processed_array[has_drawing] = 1
+
+        # recover the shape, took me one hour to find this out
+        processed_array.shape = (fbo.size[1],fbo.size[0])
+        return processed_array
+
