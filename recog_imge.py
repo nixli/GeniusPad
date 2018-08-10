@@ -46,7 +46,13 @@ class Point:
         self.x = x
         self.y = y
         self.clusterid = clusterid
+        self.is_noise = True
 
+class Cluter:
+    def __init__(self, clusterid, init_point):
+        self.id = clusterid
+        self.pts = set()
+        self.pts.add(init_point)
 
 def EquationRecognizer(img, pipe):
     # TODO implement this
@@ -63,14 +69,71 @@ def EquationRecognizer(img, pipe):
 
 
 def DBSCAN(drawing, eps=1, minpts=5):
-    pts = []
+    cur_cluster = 0
+    clusters = set()
+    pts = set()
     # get points and their pixel location
     pt_iter = np.nditer(drawing, flags=['multi_index', ])
     while not pt_iter.finished:
         if pt_iter[0] == 1:
-            pts.append(Point(*pt_iter.multi_index))
+            pts.add(Point(*pt_iter.multi_index))
         pt_iter.iternext()
     pr_info("Number of Points: ", len(pts))
+
+    for pt in pts:
+        # point already assigned a cluster
+        if pt.clusterid != None:
+            continue
+        # find cluster neighbors - the density reachable ones
+        neighors = find_neighbors(drawing, pt, eps, minpts)
+        # noise point
+        if neighors is None:
+            continue
+
+        cur_cluster += 1
+        new_cluster = Cluster(cur_cluster, pt)
+        clusters.add(new_cluster)
+
+
+        for neighbor_pt in neighors:
+            if neighbor_pt.clusterid is not None:
+                continue
+
+            new_cluster.add(neighbor_pt)
+            new_neighbors = find_neighbors(drawing, neighbor_pt, eps, minpts)
+            if new_neighbors is not None:
+                new_cluster.pts.update(new_neighbors)
+                neighors += new_neighbors
+
+def find_neighbors(drawing, pt, eps, minpts):
+
+    ret = []
+    row, col  = drawing.shape
+    lower_bound = lambda x, e: x - e if x - e > 0 else 0
+    upper_bound = lambda x, e, q: x + e + 1 if x + e + 1 < q else q
+
+    upper_x = upper_bound(pt.x, eps, row)
+    lower_x = lower_bound(pt.x, eps)
+
+    upper_y = upper_bound(pt.y, eps, col)
+    lower_y = lower_bound(pt.y, eps)
+
+    for i in range(lower_x, upper_x):
+        for j in range(lower_y, upper_y):
+            if drawing[i][j]:
+                ret.append()
+
+
+
+            
+                
+
+        
+
+
+
+
+
 
 #http://www.cse.buffalo.edu/faculty/azhang/cse601/density-based.ppt
 #    for point in pts:
