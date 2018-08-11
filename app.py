@@ -1,10 +1,12 @@
 #!/usr/bin/python3
 
-import genius_pad
-import multiprocessing as mp
 import atexit
+import multiprocessing as mp
 import os
 import signal
+
+import genius_pad
+
 
 class Controller():
     def __init__(self):

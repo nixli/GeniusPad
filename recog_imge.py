@@ -1,30 +1,27 @@
-import tensorflow as tf
-import numpy as np
+import cProfile
 import multiprocessing as mp
 import time
 
-from functools import reduce
-from copy import deepcopy
-import cProfile
+import numpy as np
 
 
 def pr_info(*args, mode="I"):
     color_modes = {
-        "I": ("INFO"   , "\x1b[1;32m", "\x1b[0m"),
+        "I": ("INFO", "\x1b[1;32m", "\x1b[0m"),
         "W": ("WARNING", "\x1b[1;33m", "\x1b[0m"),
-        "E": ("ERROR"  , "\x1b[1;31m", "\x1b[0m")
+        "E": ("ERROR", "\x1b[1;31m", "\x1b[0m")
     }
 
     print("[{}{:<7}{}] [{:<12}] {}".format(color_modes[mode][1], color_modes[mode][0], color_modes[mode][2],
-                                            "APPLICATION", " ".join([str(i) for i in args])))
+                                           "APPLICATION", " ".join([str(i) for i in args])))
 
 
 def debug_img(drawing):
     row, col = drawing.shape
 
-    for i in range(row//10 ):
-        for j in range(col//10):
-            if drawing[i*10][j*10] > 0:
+    for i in range(row // 10):
+        for j in range(col // 10):
+            if drawing[i * 10][j * 10] > 0:
                 print(".", end='')
             else:
                 print(" ", end='')
@@ -32,53 +29,61 @@ def debug_img(drawing):
 
 
 class RecognitionResult:
-
     def __init__(self, data=None, info="Not available"):
         self.info = info
         self.data = data
 
-    def run(self):
-        pass
-
 
 class Point:
-
-    def __init__(self, x, y, clusterid = None):
+    def __init__(self, x, y, clusterid=None):
         self.x = x
         self.y = y
         self.clusterid = clusterid
         self.is_noise = True
 
+
 class Cluster:
     def __init__(self, clusterid, init_point):
+
+        # init_point is of type Point
         self.id = clusterid
         self.pts = set()
         self.pts.add(init_point)
 
+        # keep track of the min/max values to get sub-image
+        self.xmin = init_point.x
+        self.ymin = init_point.y
+        self.xmax = init_point.x
+        self.ymax = init_point.y
+
     def add(self, pt):
+        # add and update the bounding box information
         self.pts.add(pt)
 
+        if pt.x < self.xmin:
+            self.xmin = pt.x
+        if pt.y < self.ymin:
+            self.ymin = pt.y
+        if pt.x > self.xmax:
+            self.xmax = pt.x
+        if pt.y > self.ymax:
+            self.ymax = pt.y
 
-def use_subimage_and_predict(cluster):
-    x_max = 0
-    x_min = 9999999
-    y_max = 0
-    y_min = 9999999
-    for pt in cluster.pts:
-        if pt.x > x_max:
-            x_max = pt.x
-        if pt.x < x_min:
-            x_min = pt.x
-        if pt.y > y_max:
-            y_max = pt.y
-        if pt.y < y_min:
-            y_min = pt.y
 
-    return x_max, x_min, y_max, y_min
+# take in each cluster, massage the data into the same dimension
+# recognize each sub-image with trained model
+def recognize_clusters(clusters, image):
+
+    predictions = []
+    for c in clusters:
+        predictions.append((c.xmax, c.xmin, c.ymax, c.ymin))
+
+    return predictions
 
 
 def formulate_result(predictions):
     return RecognitionResult(predictions, "OK")
+
 
 # this is slow, try to make it faster
 def get_only_points(drawing):
@@ -92,10 +97,9 @@ def get_only_points(drawing):
 
     pr_info("Number of Points: ", len(pts))
     return pts, pt_hash
-    
+
 
 def DBSCAN(drawing, eps=5, minpts=10):
-
     pts, pt_hash = get_only_points(drawing)
     clusters = set()
     cur_cluster = 0
@@ -113,7 +117,7 @@ def DBSCAN(drawing, eps=5, minpts=10):
         cur_cluster += 1
         pt.clusterid = cur_cluster
         new_cluster = Cluster(cur_cluster, pt)
-        
+
         clusters.add(new_cluster)
 
         # dynamically expand the neighbor space
@@ -133,7 +137,6 @@ def DBSCAN(drawing, eps=5, minpts=10):
 
 
 def find_neighbors(drawing, pt, eps, minpts, pt_hash):
-
     ret = []
     row, col = drawing.shape
     lower_bound = lambda x, e: x - e if x - e > 0 else 0
@@ -150,14 +153,14 @@ def find_neighbors(drawing, pt, eps, minpts, pt_hash):
         return None
 
     for index in non_zeros:
-        ret.append(pt_hash[lower_x+index[0], lower_y+index[1]])
+        ret.append(pt_hash[lower_x + index[0], lower_y + index[1]])
 
     return ret
 
 
 def EquationRecognizer(img, pipe):
     # make sure we have a queue for inter process communication
-    assert(isinstance(pipe, mp.queues.Queue))
+    assert (isinstance(pipe, mp.queues.Queue))
     pr_info("received image with shape", img.shape)
 
     start = time.time()
@@ -165,11 +168,9 @@ def EquationRecognizer(img, pipe):
     end = time.time()
     pr_info("Operation took {:.3f}s, {} clusters".format(end - start, len(clusters)))
 
-    predictions = []
-    for each_cluster in clusters:
-        predictions.append(use_subimage_and_predict(each_cluster))
+    recognitions = recognize_clusters(clusters, img)
 
-    result = formulate_result(predictions)
+    result = formulate_result(recognitions)
     pipe.put(result)
     return
 
@@ -177,12 +178,10 @@ def EquationRecognizer(img, pipe):
 def EquationRecognizer2(img, pipe):
     cProfile.runctx("EquationRecognizer2(img, pipe)",
                     globals={"EquationRecognizer2": EquationRecognizer2},
-                    locals={"img": img, "pipe": pipe} )
+                    locals={"img": img, "pipe": pipe})
 
 
-
-
-#http://www.cse.buffalo.edu/faculty/azhang/cse601/density-based.ppt
+# http://www.cse.buffalo.edu/faculty/azhang/cse601/density-based.ppt
 # garbage code dump here
 '''
     # get points and their pixel location

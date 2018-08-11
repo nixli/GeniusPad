@@ -1,25 +1,23 @@
-from kivy.app import App
-from kivy.uix.widget import Widget
-from kivy.uix.button import Button
-from kivy.core.window import Window
-from kivy.animation import Animation
-from kivy.uix.label import Label
-from kivy.uix.floatlayout import  FloatLayout
-from kivy.clock import Clock
-from kivy.graphics import (
-    Canvas, Translate, Fbo, ClearColor, ClearBuffers, Scale, Color, Line, Rectangle)
-
 import os
-from random import random
 import queue
-import multiprocessing as mp
-import numpy as np
+from random import random
+from kivy.graphics.instructions import InstructionGroup
+from kivy.animation import Animation
+from kivy.app import App
+from kivy.clock import Clock
+from kivy.core.window import Window
+from kivy.graphics import (
+    Translate, Fbo, ClearColor, ClearBuffers, Scale, Color, Line, Rectangle)
+from kivy.uix.button import Button
+from kivy.uix.floatlayout import FloatLayout
+from kivy.uix.label import Label
+from kivy.uix.widget import Widget
 
 # local includes
 from recog_imge import *
 
-class ClipBoard(Widget):
 
+class ClipBoard(Widget):
     def on_touch_down(self, touch):
         color = (random(), 1, 1)
         with self.canvas:
@@ -55,7 +53,6 @@ class ClipBoard(Widget):
 
 
 class GeniusPad(App):
-
     def build(self):
         self.dir_path = os.path.dirname(os.path.realpath(__file__))
         Window.clearcolor = (1, 1, 1, 1)
@@ -63,12 +60,12 @@ class GeniusPad(App):
         self.painter = ClipBoard()
 
         clearbtn = Button(text='Clear', size_hint=(.1, .1),
-                pos_hint={'x':.0, 'y':.0})
+                          pos_hint={'x': .0, 'y': .0})
 
         self.savebtn = Button(text="Compute", size_hint=(.1, .1),
-                pos_hint={'x': .9, 'y': .0})
+                              pos_hint={'x': .9, 'y': .0})
         clearbtn.bind(on_release=self.clear_canvas)
-        self.savebtn.bind(on_release = self.init_compute)
+        self.savebtn.bind(on_release=self.init_compute)
 
         self.parent.add_widget(self.painter)
         self.parent.add_widget(clearbtn)
@@ -77,6 +74,7 @@ class GeniusPad(App):
 
         self.img_count = 0
         self.pipe = mp.Queue()
+        self.cluster_boxes = None
         with self.parent.canvas.before:
             Color(1, 1, 1, 1)
             self.rect = Rectangle(size=self.parent.size, pos=self.parent.pos)
@@ -85,7 +83,7 @@ class GeniusPad(App):
     def init_compute(self, _):
         img_array = self.generate_image_data()
 
-        self.task = mp.Process(target=EquationRecognizer, args=(img_array, self.pipe, ))
+        self.task = mp.Process(target=EquationRecognizer, args=(img_array, self.pipe,))
         self.task.start()
 
         # fetch the result after one second
@@ -98,23 +96,29 @@ class GeniusPad(App):
             self.render_with_result()
 
     def render_with_result(self):
-        # TODO: re draw based on the result given back
         try:
             result = self.pipe.get(timeout=1)
         except queue.Empty:
             pr_info("Something went wrong with the computation", mode="W")
             return
         pr_info("Computation Result:", result.info)
-        with self.painter.canvas:
-            for info in result.data:
-                Color(0, 0, 0, 1)
-                pr_info("Rectangle: ", info[0], info[1], info[2], info[3])
-                Line(points=(info[3], self.painter.height- info[0],
+
+        # redraw bounding boxes
+        if self.cluster_boxes is not None:
+            self.painter.canvas.remove(self.cluster_boxes)
+
+        self.cluster_boxes = InstructionGroup()
+        self.cluster_boxes.add(Color(0, 0, 0, 1))
+        for info in result.data:
+            pr_info("Rectangle: ", info[0], info[1], info[2], info[3])
+            self.cluster_boxes.add(
+                Line(points=(info[3], self.painter.height - info[0],
                              info[2], self.painter.height - info[0],
                              info[2], self.painter.height - info[1],
                              info[3], self.painter.height - info[1],
-                             info[3], self.painter.height - info[0]))
+                             info[3], self.painter.height - info[0])))
 
+        self.painter.canvas.add(self.cluster_boxes)
 
     def _update_rect(self, instance, value):
         self.rect.pos = instance.pos
@@ -128,10 +132,10 @@ class GeniusPad(App):
         fbo = self.painter.make_fbo()
         with self.parent.canvas:
             anmi = Animation(opacity=0, duration=3)
-            x,y = Window.size
-            label_size = x/2, y/2
-            msg = Label(text="Computing...", color = [0,0,0,1], size = label_size,
-                        texture_size = label_size, bold = True)
+            x, y = Window.size
+            label_size = x / 2, y / 2
+            msg = Label(text="Computing...", color=[0, 0, 0, 1], size=label_size,
+                        texture_size=label_size, bold=True)
             anmi.start(msg)
 
         # each pixel is 8 bits, but the idea of color needs to be abstracted out
@@ -143,6 +147,5 @@ class GeniusPad(App):
         processed_array[has_drawing] = 1
 
         # recover the shape, took me one hour to find this out
-        processed_array.shape = (fbo.size[1],fbo.size[0])
+        processed_array.shape = (fbo.size[1], fbo.size[0])
         return processed_array
-
