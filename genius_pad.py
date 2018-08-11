@@ -24,7 +24,7 @@ class ClipBoard(Widget):
         color = (random(), 1, 1)
         with self.canvas:
             Color(*color, mode='hsv')
-            touch.ud['line'] = Line(points=(touch.x, touch.y), width=5)
+            touch.ud['line'] = Line(points=(touch.x, touch.y), width=2)
 
     def on_touch_move(self, touch):
         touch.ud['line'].points += [touch.x, touch.y]
@@ -102,7 +102,16 @@ class GeniusPad(App):
     def render_with_result(self):
         # TODO: re draw based on the result given back
         result = self.pipe.get()
-        print(result.info)
+        with self.painter.canvas:
+            for info in result.data:
+                Color(0, 0, 0, 1)
+                print(info[0], info[1], info[2], info[3])
+                Line(points=(info[3], self.painter.height- info[0],
+                             info[2], self.painter.height - info[0],
+                             info[2], self.painter.height - info[1],
+                             info[3], self.painter.height - info[1],
+                             info[3], self.painter.height - info[0]))
+
 
     def _update_rect(self, instance, value):
         self.rect.pos = instance.pos

@@ -32,9 +32,9 @@ def debug_img(drawing):
 
 class RecognitionResult:
 
-    def __init__(self):
-        self.data_ready = False
+    def __init__(self, data):
         self.info = "Not available"
+        self.data = data
 
     def run(self):
         pass
@@ -48,35 +48,72 @@ class Point:
         self.clusterid = clusterid
         self.is_noise = True
 
-class Cluter:
+class Cluster:
     def __init__(self, clusterid, init_point):
         self.id = clusterid
         self.pts = set()
         self.pts.add(init_point)
 
+    def add(self, pt):
+        self.pts.add(pt)
+
 def EquationRecognizer(img, pipe):
-    # TODO implement this
     # make sure we have a queue for inter process communication
     assert(isinstance(pipe, mp.queues.Queue))
     pr_info("received image with shape", img.shape)
 
-    DBSCAN(img)
-    # fill the result from the computation
-    result = RecognitionResult()
+    start = time.time()
+    clusters = DBSCAN(img)
+    end = time.time()
+    pr_info("Operation took {:.3f}s, {} clusters".format(end - start, len(clusters)))
 
+    predictions = []
+    for each_cluster in clusters:
+        predictions.append(use_subimage_and_predict(each_cluster))
+
+    result = formulate_result(predictions)
     pipe.put(result)
     return
 
 
-def DBSCAN(drawing, eps=1, minpts=5):
-    cur_cluster = 0
+def use_subimage_and_predict(cluster):
+    x_max = 0
+    x_min = 9999999
+    y_max = 0
+    y_min = 9999999
+    for pt in cluster.pts:
+        if pt.x > x_max:
+            x_max = pt.x
+        if pt.x < x_min:
+            x_min = pt.x
+        if pt.y > y_max:
+            y_max = pt.y
+        if pt.y < y_min:
+            y_min = pt.y
+
+    return x_max, x_min, y_max, y_min
+
+
+
+
+def formulate_result(predictions):
+    return RecognitionResult(predictions)
+
+
+def DBSCAN(drawing, eps=5, minpts=10):
+    pts = []
+    pt_hash = {}
     clusters = set()
-    pts = set()
+    cur_cluster = 0
+
     # get points and their pixel location
     pt_iter = np.nditer(drawing, flags=['multi_index', ])
     while not pt_iter.finished:
         if pt_iter[0] == 1:
-            pts.add(Point(*pt_iter.multi_index))
+            pt = Point(*pt_iter.multi_index)
+            pts.append(pt)
+            pt_hash[pt_iter.multi_index] = pt
+
         pt_iter.iternext()
     pr_info("Number of Points: ", len(pts))
 
@@ -85,27 +122,32 @@ def DBSCAN(drawing, eps=1, minpts=5):
         if pt.clusterid != None:
             continue
         # find cluster neighbors - the density reachable ones
-        neighors = find_neighbors(drawing, pt, eps, minpts)
+        neighors = find_neighbors(drawing, pt, eps, minpts, pt_hash)
         # noise point
         if neighors is None:
             continue
 
         cur_cluster += 1
+        pt.clusterid = cur_cluster
         new_cluster = Cluster(cur_cluster, pt)
         clusters.add(new_cluster)
 
-
         for neighbor_pt in neighors:
+            # this neighbor is already identified, don't touch
             if neighbor_pt.clusterid is not None:
                 continue
-
+            neighbor_pt.clusterid = cur_cluster
             new_cluster.add(neighbor_pt)
-            new_neighbors = find_neighbors(drawing, neighbor_pt, eps, minpts)
+            new_neighbors = find_neighbors(drawing, neighbor_pt, eps, minpts, pt_hash)
             if new_neighbors is not None:
-                new_cluster.pts.update(new_neighbors)
                 neighors += new_neighbors
 
-def find_neighbors(drawing, pt, eps, minpts):
+    return clusters
+
+
+
+
+def find_neighbors(drawing, pt, eps, minpts, pt_hash):
 
     ret = []
     row, col  = drawing.shape
@@ -121,7 +163,11 @@ def find_neighbors(drawing, pt, eps, minpts):
     for i in range(lower_x, upper_x):
         for j in range(lower_y, upper_y):
             if drawing[i][j]:
-                ret.append()
+                ret.append(pt_hash[(i,j)])
+    if len(ret) < minpts:
+        return None
+    else:
+        return ret
 
 
 
