@@ -84,7 +84,7 @@ def formulate_result(predictions):
 def get_only_points(drawing):
     pts = []
     pt_hash = {}
-    non_zeros = np.argwhere(drawing>0)
+    non_zeros = np.argwhere(drawing)
     for i in non_zeros:
         pt = Point(*i)
         pts.append(pt)
@@ -132,12 +132,10 @@ def DBSCAN(drawing, eps=5, minpts=10):
     return clusters
 
 
-
-
 def find_neighbors(drawing, pt, eps, minpts, pt_hash):
 
     ret = []
-    row, col  = drawing.shape
+    row, col = drawing.shape
     lower_bound = lambda x, e: x - e if x - e > 0 else 0
     upper_bound = lambda x, e, q: x + e + 1 if x + e + 1 < q else q
 
@@ -147,17 +145,17 @@ def find_neighbors(drawing, pt, eps, minpts, pt_hash):
     upper_y = upper_bound(pt.y, eps, col)
     lower_y = lower_bound(pt.y, eps)
 
-    for i in range(lower_x, upper_x):
-        for j in range(lower_y, upper_y):
-            if drawing[i][j]:
-                ret.append(pt_hash[(i,j)])
-    if len(ret) < minpts:
+    non_zeros = np.argwhere(drawing[lower_x: upper_x, lower_y: upper_y])
+    if non_zeros.size < minpts:
         return None
-    else:
-        return ret
+
+    for index in non_zeros:
+        ret.append(pt_hash[lower_x+index[0], lower_y+index[1]])
+
+    return ret
 
 
-def EquationRecognizer2(img, pipe):
+def EquationRecognizer(img, pipe):
     # make sure we have a queue for inter process communication
     assert(isinstance(pipe, mp.queues.Queue))
     pr_info("received image with shape", img.shape)
@@ -176,7 +174,7 @@ def EquationRecognizer2(img, pipe):
     return
 
 
-def EquationRecognizer(img, pipe):
+def EquationRecognizer2(img, pipe):
     cProfile.runctx("EquationRecognizer2(img, pipe)",
                     globals={"EquationRecognizer2": EquationRecognizer2},
                     locals={"img": img, "pipe": pipe} )
