@@ -11,9 +11,9 @@ from kivy.graphics import (
 
 import os
 from random import random
+import queue
 import multiprocessing as mp
 import numpy as np
-from matplotlib.image import imread
 
 # local includes
 from recog_imge import *
@@ -46,9 +46,7 @@ class ClipBoard(Widget):
 
         fbo.add(self.canvas)
         fbo.draw()
-        fbo.texture.save("/tmp/acfd")
         fbo.remove(self.canvas)
-
 
         if self.parent is not None and canvas_parent_index > -1:
             self.parent.canvas.insert(canvas_parent_index, self.canvas)
@@ -67,8 +65,8 @@ class GeniusPad(App):
         clearbtn = Button(text='Clear', size_hint=(.1, .1),
                 pos_hint={'x':.0, 'y':.0})
 
-        self.savebtn = Button(text = "Compute", size_hint=(.1, .1),
-                pos_hint={'x':.9, 'y':.0})
+        self.savebtn = Button(text="Compute", size_hint=(.1, .1),
+                pos_hint={'x': .9, 'y': .0})
         clearbtn.bind(on_release=self.clear_canvas)
         self.savebtn.bind(on_release = self.init_compute)
 
@@ -101,11 +99,16 @@ class GeniusPad(App):
 
     def render_with_result(self):
         # TODO: re draw based on the result given back
-        result = self.pipe.get()
+        try:
+            result = self.pipe.get(timeout=1)
+        except queue.Empty:
+            pr_info("Something went wrong with the computation", mode="W")
+            return
+        pr_info("Computation Result:", result.info)
         with self.painter.canvas:
             for info in result.data:
                 Color(0, 0, 0, 1)
-                print(info[0], info[1], info[2], info[3])
+                pr_info("Rectangle: ", info[0], info[1], info[2], info[3])
                 Line(points=(info[3], self.painter.height- info[0],
                              info[2], self.painter.height - info[0],
                              info[2], self.painter.height - info[1],
