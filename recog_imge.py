@@ -82,10 +82,13 @@ def recognize_clusters(clusters, image):
     for c in clusters:
         sub_image = image[c.xmin:c.xmax+1, c.ymin:c.ymax+1]
         sub_image.shape = (sub_image.shape + (1,))
+        larger_dim = sub_image.shape[0] if sub_image.shape[0] >= sub_image.shape[1] else sub_image.shape[1]
         with tf.Session() as s:
             resized_images.append(
-                s.run(tf.image.resize_image_with_crop(
-                sub_image, 100, 100)))
+                s.run(tf.image.resize_images(
+                tf.image.resize_image_with_pad(
+                sub_image, larger_dim, larger_dim),
+                [100, 100])))
 
     for img in resized_images:
         pr_info("resized shape: ", img.shape)
