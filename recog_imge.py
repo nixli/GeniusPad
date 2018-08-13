@@ -1,7 +1,7 @@
 import cProfile
 import multiprocessing as mp
 import time
-
+import tensorflow as tf
 import numpy as np
 
 
@@ -17,11 +17,11 @@ def pr_info(*args, mode="I"):
 
 
 def debug_img(drawing):
-    row, col = drawing.shape
+    row, col, _ = drawing.shape
 
-    for i in range(row // 10):
-        for j in range(col // 10):
-            if drawing[i * 10][j * 10] > 0:
+    for i in range(row):
+        for j in range(col):
+            if drawing[i][j][0] > 0:
                 print(".", end='')
             else:
                 print(" ", end='')
@@ -75,8 +75,23 @@ class Cluster:
 def recognize_clusters(clusters, image):
 
     predictions = []
+    resized_images = []
     for c in clusters:
         predictions.append((c.xmax, c.xmin, c.ymax, c.ymin))
+
+    for c in clusters:
+        sub_image = image[c.xmin:c.xmax+1, c.ymin:c.ymax+1]
+        sub_image.shape = (sub_image.shape + (1,))
+        with tf.Session() as s:
+            resized_images.append(
+                s.run(tf.image.resize_image_with_crop(
+                sub_image, 100, 100)))
+
+    for img in resized_images:
+        pr_info("resized shape: ", img.shape)
+        debug_img(img)
+
+
 
     return predictions
 
