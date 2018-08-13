@@ -81,6 +81,11 @@ class GeniusPad(App):
         return self.parent
 
     def init_compute(self, _):
+
+        # remove bounding boxes
+        if self.cluster_boxes is not None:
+            self.painter.canvas.remove(self.cluster_boxes)
+
         img_array = self.generate_image_data()
 
         self.task = mp.Process(target=EquationRecognizer, args=(img_array, self.pipe,))
@@ -102,10 +107,6 @@ class GeniusPad(App):
             pr_info("Something went wrong with the computation", mode="W")
             return
         pr_info("Computation Result:", result.info)
-
-        # redraw bounding boxes
-        if self.cluster_boxes is not None:
-            self.painter.canvas.remove(self.cluster_boxes)
 
         self.cluster_boxes = InstructionGroup()
         self.cluster_boxes.add(Color(0, 0, 0, 1))

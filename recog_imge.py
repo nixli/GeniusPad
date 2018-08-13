@@ -3,7 +3,7 @@ import multiprocessing as mp
 import time
 import tensorflow as tf
 import numpy as np
-
+import copy
 
 def pr_info(*args, mode="I"):
     color_modes = {
@@ -55,6 +55,7 @@ class Cluster:
         self.ymin = init_point.y
         self.xmax = init_point.x
         self.ymax = init_point.y
+        self.image = None
 
     def add(self, pt):
         # add and update the bounding box information
@@ -69,7 +70,13 @@ class Cluster:
         if pt.y > self.ymax:
             self.ymax = pt.y
 
+    def form_image(self):
+        dimx, dimy = self.xmax - self.xmin + 1, self.ymax - self.ymin + 1
+        self.image = np.zeros(shape=(dimx, dimy, 1), dtype=np.uint8)
+        for pt in self.pts:
+            self.image[pt.x - self.xmin, pt.y - self.ymin] = 255
 
+        return self.image
 # take in each cluster, massage the data into the same dimension
 # recognize each sub-image with trained model
 def recognize_clusters(clusters, image):
@@ -80,21 +87,18 @@ def recognize_clusters(clusters, image):
         predictions.append((c.xmax, c.xmin, c.ymax, c.ymin))
 
     for c in clusters:
-        sub_image = image[c.xmin:c.xmax+1, c.ymin:c.ymax+1]
-        sub_image.shape = (sub_image.shape + (1,))
+        sub_image = c.form_image()
         larger_dim = sub_image.shape[0] if sub_image.shape[0] >= sub_image.shape[1] else sub_image.shape[1]
         with tf.Session() as s:
             resized_images.append(
                 s.run(tf.image.resize_images(
-                tf.image.resize_image_with_pad(
+                tf.image.resize_image_with_crop_or_pad(
                 sub_image, larger_dim, larger_dim),
                 [100, 100])))
 
     for img in resized_images:
         pr_info("resized shape: ", img.shape)
         debug_img(img)
-
-
 
     return predictions
 
