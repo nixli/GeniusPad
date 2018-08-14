@@ -223,7 +223,7 @@ def EquationRecognizer2(img, pipe):
                     locals={"img": img, "pipe": pipe})
 
 
-
+# https://github.com/tensorflow/tensorflow/blob/master/tensorflow/contrib/learn/python/learn/datasets/mnist.py
 # https://www.nist.gov/itl/iad/image-group/emnist-dataset
 # http://www.cse.buffalo.edu/faculty/azhang/cse601/density-based.ppt
 # garbage code dump here
