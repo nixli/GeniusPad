@@ -77,44 +77,48 @@ class Cluster:
             self.image[pt.x - self.xmin, pt.y - self.ymin] = 255
 
         return self.image
+
+
 # take in each cluster, massage the data into the same dimension
 # recognize each sub-image with trained model
 def recognize_clusters(clusters):
 
+    with mp.Manager() as manager:
+        reconition_tasks = []
+        results = manager.list()
+
+        for c in clusters:
+            per_cluster_process = mp.Process(target=recognize_each_cluster, args = (c, results))
+            reconition_tasks.append(per_cluster_process)
+            per_cluster_process.start()
+
+        for p in reconition_tasks:
+            p.join()
+
+        for img in results:
+            debug_img(img)
+
+    # for debug use now.
     predictions = []
-    results = mp.Queue()
-    resized_images = []
-    reconition_tasks = []
-
     for c in clusters:
-        per_cluster_process = mp.Process(target=recognize_each_cluster, args = (c, results))
-        per_cluster_process.start()
-        reconition_tasks.append(per_cluster_process)
         predictions.append((c.xmax, c.xmin, c.ymax, c.ymin))
-
-    for p in reconition_tasks:
-        p.join()
-        #resized_images.append(results.get(), timeout=1)
-
-
-    for img in resized_images:
-        pr_info("resized shape: ", img.shape)
-        debug_img(img)
-
     return predictions
 
+
+# take in each cluster and produce the labels as well as position
 def recognize_each_cluster(cluster, results):
+
+    # results is a shared list among cluster processes
     sub_image = cluster.form_image()
     larger_dim = sub_image.shape[0] if sub_image.shape[0] >= sub_image.shape[1] else sub_image.shape[1]
 
     with tf.Session() as s:
         resized_image = s.run(tf.image.resize_images(
             tf.image.resize_image_with_crop_or_pad(
-                sub_image, larger_dim, larger_dim),
-            [100, 100]))
+            sub_image, larger_dim, larger_dim),[100, 100],
+            method=tf.image.ResizeMethod.AREA))
 
-    time.sleep(5)
-    results.put(resized_image)
+    results.append(resized_image)
     return
 
 
