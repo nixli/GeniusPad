@@ -3,7 +3,17 @@ import multiprocessing as mp
 import time
 import tensorflow as tf
 import numpy as np
-import copy
+
+############################################
+# Globals that gets updates periodically   #
+############################################
+#pts = []
+#pt_hash = {}
+#clusters = set()
+############################################
+# Globals that gets updates periodically   #
+############################################
+
 
 def pr_info(*args, mode="I"):
     color_modes = {
@@ -95,8 +105,8 @@ def recognize_clusters(clusters):
         for p in reconition_tasks:
             p.join()
 
-        for img in results:
-            debug_img(img)
+        # for img in results:
+        #     debug_img(img)
 
     # for debug use now.
     predictions = []
@@ -205,10 +215,8 @@ def EquationRecognizer(img, pipe):
     assert (isinstance(pipe, mp.queues.Queue))
     pr_info("received image with shape", img.shape)
 
-    start = time.time()
     clusters = DBSCAN(img)
-    end = time.time()
-    pr_info("Operation took {:.3f}s, {} clusters".format(end - start, len(clusters)))
+    pr_info("Total {} clusters".format(len(clusters)))
 
     recognitions = recognize_clusters(clusters)
 

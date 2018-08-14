@@ -81,7 +81,7 @@ class GeniusPad(App):
         return self.parent
 
     def init_compute(self, _):
-
+        self.computation_start = time.time()
         # remove bounding boxes
         if self.cluster_boxes is not None:
             self.painter.canvas.remove(self.cluster_boxes)
@@ -120,6 +120,7 @@ class GeniusPad(App):
                              info[3], self.painter.height - info[0])))
 
         self.painter.canvas.add(self.cluster_boxes)
+        pr_info("Computation took {:.3f}s".format(time.time() - self.computation_start) )
 
     def _update_rect(self, instance, value):
         self.rect.pos = instance.pos
