@@ -79,28 +79,44 @@ class Cluster:
         return self.image
 # take in each cluster, massage the data into the same dimension
 # recognize each sub-image with trained model
-def recognize_clusters(clusters, image):
+def recognize_clusters(clusters):
 
     predictions = []
+    results = mp.Queue()
     resized_images = []
-    for c in clusters:
-        predictions.append((c.xmax, c.xmin, c.ymax, c.ymin))
+    reconition_tasks = []
 
     for c in clusters:
-        sub_image = c.form_image()
-        larger_dim = sub_image.shape[0] if sub_image.shape[0] >= sub_image.shape[1] else sub_image.shape[1]
-        with tf.Session() as s:
-            resized_images.append(
-                s.run(tf.image.resize_images(
-                tf.image.resize_image_with_crop_or_pad(
-                sub_image, larger_dim, larger_dim),
-                [100, 100])))
+        per_cluster_process = mp.Process(target=recognize_each_cluster, args = (c, results))
+        per_cluster_process.start()
+        reconition_tasks.append(per_cluster_process)
+        predictions.append((c.xmax, c.xmin, c.ymax, c.ymin))
+
+    for p in reconition_tasks:
+        p.join()
+        #resized_images.append(results.get(), timeout=1)
+
 
     for img in resized_images:
         pr_info("resized shape: ", img.shape)
         debug_img(img)
 
     return predictions
+
+def recognize_each_cluster(cluster, results):
+    sub_image = cluster.form_image()
+    larger_dim = sub_image.shape[0] if sub_image.shape[0] >= sub_image.shape[1] else sub_image.shape[1]
+
+    with tf.Session() as s:
+        resized_image = s.run(tf.image.resize_images(
+            tf.image.resize_image_with_crop_or_pad(
+                sub_image, larger_dim, larger_dim),
+            [100, 100]))
+
+    time.sleep(5)
+    results.put(resized_image)
+    return
+
 
 
 def formulate_result(predictions):
@@ -190,7 +206,7 @@ def EquationRecognizer(img, pipe):
     end = time.time()
     pr_info("Operation took {:.3f}s, {} clusters".format(end - start, len(clusters)))
 
-    recognitions = recognize_clusters(clusters, img)
+    recognitions = recognize_clusters(clusters)
 
     result = formulate_result(recognitions)
     pipe.put(result)
