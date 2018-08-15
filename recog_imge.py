@@ -125,7 +125,7 @@ def recognize_each_cluster(cluster, results):
     with tf.Session() as s:
         resized_image = s.run(tf.image.resize_images(
             tf.image.resize_image_with_crop_or_pad(
-            sub_image, larger_dim, larger_dim),[100, 100],
+            sub_image, larger_dim, larger_dim),[28, 28],
             method=tf.image.ResizeMethod.AREA))
 
     results.append(resized_image)
@@ -231,6 +231,8 @@ def EquationRecognizer2(img, pipe):
                     locals={"img": img, "pipe": pipe})
 
 
+# https://github.com/tensorflow/tensorflow/blob/master/tensorflow/contrib/learn/python/learn/datasets/mnist.py
+# https://www.nist.gov/itl/iad/image-group/emnist-dataset
 # http://www.cse.buffalo.edu/faculty/azhang/cse601/density-based.ppt
 # garbage code dump here
 '''
