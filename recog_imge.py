@@ -3,6 +3,7 @@ import multiprocessing as mp
 import time
 import tensorflow as tf
 import numpy as np
+import train_subimage
 
 ############################################
 # Globals that gets updates periodically   #
@@ -88,25 +89,35 @@ class Cluster:
 
         return self.image
 
-
 # take in each cluster, massage the data into the same dimension
 # recognize each sub-image with trained model
 def recognize_clusters(clusters):
+    reconition_tasks = []
+    results = []
+    num_cpus = 4
+    try:
+        num_cpus = mp.cpu_count()
+    except NotImplementedError:
+        pass
+    pool = mp.Pool(processes=num_cpus)
+    for c in clusters:
+        # start process, limit resource based on the number of cpus
+        p = pool.apply_async(recognize_each_cluster, args=(c,))
+        reconition_tasks.append((p))
 
-    with mp.Manager() as manager:
-        reconition_tasks = []
-        results = manager.list()
+    for p in reconition_tasks:
+        try:
+            result = p.get(timeout=10)
+            results.append(result.flatten())
+        except mp.TimeoutError:
+            pr_info("One of the recognition timed out", mode="W")
+            pool.terminate()
 
-        for c in clusters:
-            per_cluster_process = mp.Process(target=recognize_each_cluster, args = (c, results))
-            reconition_tasks.append(per_cluster_process)
-            per_cluster_process.start()
+    images = np.stack(results)
+    train_subimage.run(images)
 
-        for p in reconition_tasks:
-            p.join()
-
-        # for img in results:
-        #     debug_img(img)
+    # for img in results:
+    #      debug_img(img)
 
     # for debug use now.
     predictions = []
@@ -116,20 +127,22 @@ def recognize_clusters(clusters):
 
 
 # take in each cluster and produce the labels as well as position
-def recognize_each_cluster(cluster, results):
+def recognize_each_cluster(cluster):
 
     # results is a shared list among cluster processes
     sub_image = cluster.form_image()
     larger_dim = sub_image.shape[0] if sub_image.shape[0] >= sub_image.shape[1] else sub_image.shape[1]
 
-    with tf.Session() as s:
-        resized_image = s.run(tf.image.resize_images(
-            tf.image.resize_image_with_crop_or_pad(
-            sub_image, larger_dim, larger_dim),[28, 28],
-            method=tf.image.ResizeMethod.AREA))
 
-    results.append(resized_image)
-    return
+    resize_op = tf.image.resize_images(
+        tf.image.resize_image_with_crop_or_pad(
+            sub_image, larger_dim, larger_dim), [28, 28],
+        method=tf.image.ResizeMethod.AREA)
+
+    with tf.Session() as s:
+        resized_image = s.run(resize_op)
+
+    return resized_image
 
 
 
