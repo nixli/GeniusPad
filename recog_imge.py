@@ -82,10 +82,11 @@ class Cluster:
             self.ymax = pt.y
 
     def form_image(self):
-        dimx, dimy = self.xmax - self.xmin + 1, self.ymax - self.ymin + 1
-        self.image = np.zeros(shape=(dimx, dimy, 1), dtype=np.uint8)
+        border = 5
+        dimx, dimy = self.xmax - self.xmin + 1 + border*2, self.ymax - self.ymin + 1 + border*2
+        self.image = np.zeros(shape=(dimx, dimy, 1), dtype=np.float32)
         for pt in self.pts:
-            self.image[pt.x - self.xmin, pt.y - self.ymin] = 255
+            self.image[pt.x - self.xmin + border, pt.y - self.ymin + border] = 1
 
         return self.image
 
@@ -117,7 +118,7 @@ def recognize_clusters(clusters):
     train_subimage.run(images)
 
     # for img in results:
-    #      debug_img(img)
+    #      debug_img(img.reshape(28,28,1))
 
     # for debug use now.
     predictions = []

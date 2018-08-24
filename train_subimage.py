@@ -7,6 +7,7 @@ from tensorflow.python.platform import gfile
 
 DATA = 0
 LABEL = 1
+NUMBER_OF_LABELS = 62
 
 # parse error for reading data from file
 class DataSetInvalidError(Exception):
@@ -32,12 +33,12 @@ def get_images(data):
 
         data_bytes =  bytes.read(rows*cols*items)
         image_data = np.frombuffer(data_bytes, dtype=np.uint8)
-        image_data = image_data.reshape(items, rows, cols, 1)
+        image_data = image_data.reshape(items, rows* cols)
 
         return image_data
 
 
-def get_labels(data, num_classes=62):
+def get_labels(data, num_classes=NUMBER_OF_LABELS):
 
     with gzip.GzipFile(fileobj=data) as bytes:
         magic = _read32(bytes)
@@ -72,9 +73,24 @@ def read_data(train, test):
 
 
 #returns a generator that produces data of size batch_size
-def data_generator(data, batch_size=500):
+def data_generator(data, batch_size=50):
 
-    pass
+    cur_batch_start = 0
+    num_data = data[DATA].shape[0]
+    assert (data[DATA].shape[0] == data[LABEL].shape[0])
+    if batch_size > num_data:
+        raise ValueError("Batch size {} is greater than data size {}".format(batch_size, num_data))
+    while True:
+        if cur_batch_start + batch_size <= num_data:
+
+            yield data[DATA][cur_batch_start: cur_batch_start + batch_size].astype(np.float32) / 255., \
+                  data[LABEL][cur_batch_start:  cur_batch_start +batch_size].astype(np.float32)
+            cur_batch_start += batch_size
+        else:
+            need = cur_batch_start + batch_size - num_data
+            yield  np.concatenate((data[DATA][cur_batch_start: num_data], data[DATA][0:need]), axis=0).astype(np.float32) / 255., \
+                   np.concatenate((data[LABEL][cur_batch_start: num_data], data[LABEL][0:need]), axis=0).astype(np.float32)
+            cur_batch_start = need
 
 
 # cnn layers to construct the network
@@ -97,22 +113,23 @@ def max_pool_2x2(x):
                           strides=[1, 2, 2, 1], padding='SAME')
 
 
-def train(x_from_the_other_side):
+def train():
+
         os.environ["CUDA_VISIBLE_DEVICES"] = "0"
         # sicne our images are made to the same format as mnist, use mnist functions to import data
 
         train_data_path = [os.path.join(os.getcwd(), "AlphaNumericData", f) for f in
-                 ("emnist-balanced-train-images-idx3-ubyte.gz",
-                  "emnist-balanced-train-labels-idx1-ubyte.gz")]
+                 ("emnist-byclass-train-images-idx3-ubyte.gz",
+                  "emnist-byclass-train-labels-idx1-ubyte.gz")]
 
         test_data_path = [os.path.join(os.getcwd(), "AlphaNumericData", f) for f in
-                 ("emnist-balanced-test-images-idx3-ubyte.gz",
-                  "emnist-balanced-test-labels-idx1-ubyte.gz")]
+                 ("emnist-byclass-test-images-idx3-ubyte.gz",
+                  "emnist-byclass-test-labels-idx1-ubyte.gz")]
 
+
+        batch_size = 50
         train, test = read_data(train_data_path, test_data_path)
-
-        train_data = data_generator(train[DATA])
-        test_data =  data_generator(test[DATA])
+        train_dataset = data_generator(train, batch_size=batch_size)
 
         x = tf.placeholder(tf.float32, [None, 784])
 
@@ -139,16 +156,16 @@ def train(x_from_the_other_side):
         keep_prob = tf.placeholder(tf.float32)
         h_fc1_drop = tf.nn.dropout(h_fc1, keep_prob)
 
-        W_fc2 = weight_variable([1024, 10])
-        b_fc2 = bias_variable([10])
+        W_fc2 = weight_variable([1024, NUMBER_OF_LABELS])
+        b_fc2 = bias_variable([NUMBER_OF_LABELS])
 
         y_conv = tf.nn.softmax(tf.matmul(h_fc1_drop, W_fc2) + b_fc2)
 
-        y_ = tf.placeholder(tf.float32, [None, 10])
+        y_ = tf.placeholder(tf.float32, [None, NUMBER_OF_LABELS])
 
         cross_entropy = tf.reduce_mean(-tf.reduce_sum(y_ * tf.log(y_conv), reduction_indices=[1]))
 
-        train_step = tf.train.AdamOptimizer(1e-4).minimize(cross_entropy)
+        train_step = tf.train.AdamOptimizer(learning_rate=0.0001, beta1=0.9, beta2=0.999, epsilon=1e-8).minimize(cross_entropy)
 
         answer = tf.argmax(y_conv, 1)
         correct_prediction = tf.equal(tf.argmax(y_conv, 1), tf.argmax(y_, 1))
@@ -158,18 +175,24 @@ def train(x_from_the_other_side):
 
         sess = tf.Session()
         sess.run(init)
+        epoch  = 0
+        for i in range(20000):
+            if i* batch_size % train[0].shape[0] == 0:
+                epoch +=1
+                print("\n\n\n" + "*" * 10 +" AT EPOCH {}".format(epoch) + "*" * 10 + "\n\n\n")
 
-        for i in range(2000):
+            batch_xs, batch_ys = next(train_dataset)
 
-            batch_xs, batch_ys = next(train_data)
             if i % 100 == 0:
+
                 train_accuracy = accuracy.eval(session=sess, feed_dict={x: batch_xs, y_: batch_ys, keep_prob: 1.0})
                 print("step %d, training accuracy %.3f" % (i, train_accuracy))
             sess.run(train_step, feed_dict={x: batch_xs, y_: batch_ys, keep_prob: 0.5})
 
 
-        print("answer is:", answer.eval(session=sess,
-                                                 feed_dict={x: x_from_the_other_side, keep_prob: 0.5}))
+
+        print("answer is:", accuracy.eval(session=sess,
+                                                 feed_dict={x: test[0], y_: test[1], keep_prob: 1}))
 
 if __name__ == "__main__":
-    train(1)
+    train()
