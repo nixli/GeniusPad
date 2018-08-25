@@ -12,6 +12,7 @@ from kivy.uix.button import Button
 from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.label import Label
 from kivy.uix.widget import Widget
+import tensorflow as tf
 
 # local includes
 from recog_imge import *
@@ -54,6 +55,7 @@ class ClipBoard(Widget):
 
 class GeniusPad(App):
     def build(self):
+
         self.dir_path = os.path.dirname(os.path.realpath(__file__))
         Window.clearcolor = (1, 1, 1, 1)
         self.parent = FloatLayout(size=(300, 300))
@@ -88,7 +90,8 @@ class GeniusPad(App):
 
         img_array = self.generate_image_data()
 
-        self.task = mp.Process(target=EquationRecognizer, args=(img_array, self.pipe,))
+        self.task = mp.Process(target=EquationRecognizer,
+                               args=(img_array, self.pipe))
         self.task.start()
 
         # fetch the result after one second

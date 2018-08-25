@@ -90,37 +90,53 @@ class Cluster:
 
         return self.image
 
+
+
+
+def EquationRecognizer(img, pipe):
+    compute_graph = tf.Graph()
+    model_session = tf.Session(graph=compute_graph)
+    pr_info("Loading pre-computed model")
+    model_file = "saved_model2018-08-24_18:19:10.180021"
+    tf.saved_model.loader.load(model_session, [tf.saved_model.tag_constants.SERVING], model_file)
+
+    # make sure we have a queue for inter process communication
+    assert (isinstance(pipe, mp.queues.Queue))
+    pr_info("received image with shape", img.shape)
+
+    clusters = DBSCAN(img)
+    pr_info("Total {} clusters".format(len(clusters)))
+
+    recognitions = recognize_clusters(clusters, model_session, compute_graph)
+
+    result = formulate_result(recognitions)
+    pipe.put(result)
+    return
+
+
+
 # take in each cluster, massage the data into the same dimension
 # recognize each sub-image with trained model
-def recognize_clusters(clusters):
-    reconition_tasks = []
+def recognize_clusters(clusters, sess, graph):
     results = []
-    num_cpus = 4
-    try:
-        num_cpus = mp.cpu_count()
-    except NotImplementedError:
-        pass
-    pool = mp.Pool(processes=num_cpus)
     for c in clusters:
-        # start process, limit resource based on the number of cpus
-        p = pool.apply_async(recognize_each_cluster, args=(c,))
-        reconition_tasks.append((p))
+        sub_image = c.form_image()
+        larger_dim = sub_image.shape[0] if sub_image.shape[0] >= sub_image.shape[1] else sub_image.shape[1]
 
-    for p in reconition_tasks:
-        try:
-            result = p.get(timeout=10)
-            results.append(result.flatten())
-        except mp.TimeoutError:
-            pr_info("One of the recognition timed out", mode="W")
-            pool.terminate()
-
+        resize_op = tf.image.resize_images(
+            tf.image.resize_image_with_crop_or_pad(
+                sub_image, larger_dim, larger_dim), [28, 28],
+            method=tf.image.ResizeMethod.AREA)
+        with tf.Session() as s:
+            results.append(np.asarray(s.run(resize_op).flatten(), np.float32)/255.)
+    for i in results:
+        debug_img(i.reshape(28,28,1))
     images = np.stack(results)
-    train_subimage.run(images)
+    prediction = graph.get_tensor_by_name("output_y:0")
+    x = graph.get_tensor_by_name("input_x:0")
+    dropout = graph.get_tensor_by_name("model_dropout:0")
+    pr_info("predictions:", sess.run(prediction, feed_dict={x: images, dropout: 1.0}))
 
-    # for img in results:
-    #      debug_img(img.reshape(28,28,1))
-
-    # for debug use now.
     predictions = []
     for c in clusters:
         predictions.append((c.xmax, c.xmin, c.ymax, c.ymin))
@@ -140,10 +156,11 @@ def recognize_each_cluster(cluster):
             sub_image, larger_dim, larger_dim), [28, 28],
         method=tf.image.ResizeMethod.AREA)
 
-    with tf.Session() as s:
-        resized_image = s.run(resize_op)
+    #with tf.Session() as s:
+     #   resized_image = s.run(resize_op)
 
-    return resized_image
+    return resize_op
+    #return resized_image
 
 
 
@@ -223,20 +240,6 @@ def find_neighbors(drawing, pt, eps, minpts, pt_hash):
 
     return ret
 
-
-def EquationRecognizer(img, pipe):
-    # make sure we have a queue for inter process communication
-    assert (isinstance(pipe, mp.queues.Queue))
-    pr_info("received image with shape", img.shape)
-
-    clusters = DBSCAN(img)
-    pr_info("Total {} clusters".format(len(clusters)))
-
-    recognitions = recognize_clusters(clusters)
-
-    result = formulate_result(recognitions)
-    pipe.put(result)
-    return
 
 
 def EquationRecognizer2(img, pipe):

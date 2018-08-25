@@ -2,9 +2,9 @@
 
 import atexit
 import multiprocessing as mp
-import os
 import signal
-
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 import genius_pad
 class Controller():
@@ -21,6 +21,6 @@ class Controller():
 
 if __name__ == '__main__':
     # default set gpu unavailable, use it with tf.device
-    os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+
     mp.set_start_method('fork')
     Controller().pad.run()
