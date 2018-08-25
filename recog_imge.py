@@ -3,7 +3,6 @@ import multiprocessing as mp
 import time
 import tensorflow as tf
 import numpy as np
-import train_subimage
 
 ############################################
 # Globals that gets updates periodically   #
@@ -32,10 +31,10 @@ def debug_img(drawing):
 
     for i in range(row):
         for j in range(col):
-            if drawing[i][j][0] > 0:
-                print(".", end='')
-            else:
-                print(" ", end='')
+            #if drawing[i][j][0] > 0:
+                #print(".", end='')
+            #else:
+            print("{:3.1f} ".format(drawing[i][j][0]), end='')
         print()
 
 
@@ -86,7 +85,7 @@ class Cluster:
         dimx, dimy = self.xmax - self.xmin + 1 + border*2, self.ymax - self.ymin + 1 + border*2
         self.image = np.zeros(shape=(dimx, dimy, 1), dtype=np.float32)
         for pt in self.pts:
-            self.image[pt.x - self.xmin + border, pt.y - self.ymin + border] = 1
+            self.image[pt.x - self.xmin + border, pt.y - self.ymin + border] = 1.0
 
         return self.image
 
@@ -113,7 +112,9 @@ def EquationRecognizer(img, pipe):
     pipe.put(result)
     return
 
-
+LABEL_TABLE = [str(i) for i in range(10)] +\
+        [chr(i) for i in range(ord('A'), ord('Z') +1)] +\
+        [chr(i) for i in range(ord('a'), ord('z')+1)]
 
 # take in each cluster, massage the data into the same dimension
 # recognize each sub-image with trained model
@@ -128,40 +129,21 @@ def recognize_clusters(clusters, sess, graph):
                 sub_image, larger_dim, larger_dim), [28, 28],
             method=tf.image.ResizeMethod.AREA)
         with tf.Session() as s:
-            results.append(np.asarray(s.run(resize_op).flatten(), np.float32)/255.)
-    for i in results:
-        debug_img(i.reshape(28,28,1))
+            arr = s.run(resize_op).T.flatten()
+            arr[arr>0]=1.0
+            results.append(arr)
+
     images = np.stack(results)
     prediction = graph.get_tensor_by_name("output_y:0")
     x = graph.get_tensor_by_name("input_x:0")
     dropout = graph.get_tensor_by_name("model_dropout:0")
-    pr_info("predictions:", sess.run(prediction, feed_dict={x: images, dropout: 1.0}))
+    pr_info("predictions:", " ".join(LABEL_TABLE[i] for i in \
+                                     sess.run(prediction, feed_dict={x: images, dropout: 1.0})))
 
     predictions = []
     for c in clusters:
         predictions.append((c.xmax, c.xmin, c.ymax, c.ymin))
     return predictions
-
-
-# take in each cluster and produce the labels as well as position
-def recognize_each_cluster(cluster):
-
-    # results is a shared list among cluster processes
-    sub_image = cluster.form_image()
-    larger_dim = sub_image.shape[0] if sub_image.shape[0] >= sub_image.shape[1] else sub_image.shape[1]
-
-
-    resize_op = tf.image.resize_images(
-        tf.image.resize_image_with_crop_or_pad(
-            sub_image, larger_dim, larger_dim), [28, 28],
-        method=tf.image.ResizeMethod.AREA)
-
-    #with tf.Session() as s:
-     #   resized_image = s.run(resize_op)
-
-    return resize_op
-    #return resized_image
-
 
 
 def formulate_result(predictions):
@@ -182,7 +164,7 @@ def get_only_points(drawing):
     return pts, pt_hash
 
 
-def DBSCAN(drawing, eps=5, minpts=10):
+def DBSCAN(drawing, eps=20, minpts=10):
     pts, pt_hash = get_only_points(drawing)
     clusters = set()
     cur_cluster = 0
@@ -263,4 +245,24 @@ def EquationRecognizer2(img, pipe):
 
         pt_iter.iternext()
     pr_info("Number of Points: ", len(pts))
+    
+    
+    # take in each cluster and produce the labels as well as position
+def recognize_each_cluster(cluster):
+
+    # results is a shared list among cluster processes
+    sub_image = cluster.form_image()
+    larger_dim = sub_image.shape[0] if sub_image.shape[0] >= sub_image.shape[1] else sub_image.shape[1]
+
+
+    resize_op = tf.image.resize_images(
+        tf.image.resize_image_with_crop_or_pad(
+            sub_image, larger_dim, larger_dim), [28, 28],
+        method=tf.image.ResizeMethod.AREA)
+
+    #with tf.Session() as s:
+     #   resized_image = s.run(resize_op)
+
+    return resize_op
+    #return resized_image
 '''
