@@ -85,14 +85,14 @@ def data_generator(data, batch_size=50, onepass=False):
     while True:
         if cur_batch_start + batch_size <= num_data:
 
-            yield data[DATA][cur_batch_start: cur_batch_start + batch_size].astype(np.float32) / 255., \
+            yield (data[DATA][cur_batch_start: cur_batch_start + batch_size] > 0).astype(np.float32), \
                   data[LABEL][cur_batch_start:  cur_batch_start +batch_size].astype(np.float32)
             cur_batch_start += batch_size
         else:
             if onepass:
                 raise StopIteration
             need = cur_batch_start + batch_size - num_data
-            yield  np.concatenate((data[DATA][cur_batch_start: num_data], data[DATA][0:need]), axis=0).astype(np.float32) / 255., \
+            yield  (np.concatenate((data[DATA][cur_batch_start: num_data], data[DATA][0:need]), axis=0) >0).astype(np.float32), \
                    np.concatenate((data[LABEL][cur_batch_start: num_data], data[LABEL][0:need]), axis=0).astype(np.float32)
             cur_batch_start = need
 
@@ -204,7 +204,7 @@ def train():
 
         # start compute graph and train
         sess.run(init)
-        epoch  = 0
+        epoch = 0
         print("\n\n\n" + "*" * 10 + " Optimising Model for {} epoches in {} iterations".format(num_epoches, num_iterations) + "*" * 10 + "\n\n\n")
 
         for i in range(num_iterations):
