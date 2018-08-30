@@ -1,6 +1,6 @@
 import os
 import queue
-from random import random
+from random import random, randint
 from kivy.graphics.instructions import InstructionGroup
 from kivy.animation import Animation
 from kivy.app import App
@@ -13,7 +13,6 @@ from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.label import Label
 from kivy.uix.widget import Widget
 import tensorflow as tf
-
 # local includes
 from recog_imge import *
 
@@ -153,4 +152,6 @@ class GeniusPad(App):
 
         # recover the shape, took me one hour to find this out
         processed_array.shape = (fbo.size[1], fbo.size[0])
+
+        #np.save("./plus"+str(randint(0,99999)), processed_array)
         return processed_array

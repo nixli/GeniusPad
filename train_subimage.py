@@ -9,7 +9,7 @@ import datetime
 
 DATA = 0
 LABEL = 1
-NUMBER_OF_LABELS = 62
+NUMBER_OF_LABELS = 15
 
 # parse error for reading data from file
 class DataSetInvalidError(Exception):
@@ -129,12 +129,12 @@ def train():
 
         ########################## load data from file ########################################
         train_data_path = [os.path.join(os.getcwd(), "AlphaNumericData", f) for f in
-                 ("emnist-byclass-train-images-idx3-ubyte.gz",
-                  "emnist-byclass-train-labels-idx1-ubyte.gz")]
+                 ("emnist-digits-train-images-idx3-ubyte.gz",
+                  "emnist-digits-train-labels-idx1-ubyte.gz")]
 
         test_data_path = [os.path.join(os.getcwd(), "AlphaNumericData", f) for f in
-                 ("emnist-byclass-test-images-idx3-ubyte.gz",
-                  "emnist-byclass-test-labels-idx1-ubyte.gz")]
+                 ("emnist-digits-test-images-idx3-ubyte.gz",
+                  "emnist-digits-test-labels-idx1-ubyte.gz")]
 
         train, test = read_data(train_data_path, test_data_path)
         #########################################################################################
@@ -174,7 +174,7 @@ def train():
         b_fc2 = bias_variable([NUMBER_OF_LABELS])
 
         # ouput layer
-        y_conv = tf.nn.softmax(tf.matmul(h_fc1_drop, W_fc2) + b_fc2)
+        y_conv = tf.nn.softmax(tf.matmul(h_fc1_drop, W_fc2) + b_fc2, "prediction_pdf")
 
         # truth
         y_ = tf.placeholder(tf.float32, [None, NUMBER_OF_LABELS])

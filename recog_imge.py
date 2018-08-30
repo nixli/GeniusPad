@@ -3,6 +3,7 @@ import multiprocessing as mp
 import time
 import tensorflow as tf
 import numpy as np
+from random import randint
 
 ############################################
 # Globals that gets updates periodically   #
@@ -96,7 +97,7 @@ def EquationRecognizer(img, pipe):
     compute_graph = tf.Graph()
     model_session = tf.Session(graph=compute_graph)
     pr_info("Loading pre-computed model")
-    model_file = "saved_model2018-08-24_18:19:10.180021"
+    model_file = "saved_model2018-08-27_09:17:02.939645"
     tf.saved_model.loader.load(model_session, [tf.saved_model.tag_constants.SERVING], model_file)
 
     # make sure we have a queue for inter process communication
@@ -134,11 +135,12 @@ def recognize_clusters(clusters, sess, graph):
             results.append(arr)
 
     images = np.stack(results)
-    prediction = graph.get_tensor_by_name("output_y:0")
+    np.save("./plus" + str(randint(0, 99999)), results)
+    prediction_pdf = graph.get_tensor_by_name("output_y:0")
     x = graph.get_tensor_by_name("input_x:0")
     dropout = graph.get_tensor_by_name("model_dropout:0")
     pr_info("predictions:", " ".join(LABEL_TABLE[i] for i in \
-                                     sess.run(prediction, feed_dict={x: images, dropout: 1.0})))
+                                     sess.run(prediction_pdf, feed_dict={x: images, dropout: 1.0})))
 
     predictions = []
     for c in clusters:
